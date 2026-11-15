@@ -1,0 +1,71 @@
+name: ZIP entpacken und veröffentlichen
+
+# Startet automatisch, sobald eine neue cochat.zip ins Repository hochgeladen wird.
+# Du kannst es auch manuell starten (Actions → Workflow → Run workflow).
+on:
+  push:
+    branches: [main]
+    paths: ["cochat.zip"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: cochat-deploy
+  cancel-in-progress: true
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: ZIP entpacken
+        run: |
+          set -e
+          if [ -f cochat.zip ]; then
+            rm -rf _tmp && mkdir _tmp
+            unzip -q cochat.zip -d _tmp
+            # Falls alles in einem einzigen Oberordner (z. B. cochat/) liegt, diesen überspringen
+            if [ "$(ls -A _tmp | wc -l)" = "1" ] && [ -d "_tmp/$(ls _tmp)" ]; then
+              src="_tmp/$(ls _tmp)"
+            else
+              src="_tmp"
+            fi
+            rm -rf web supabase README.md
+            cp -r "$src"/. .
+            rm -rf _tmp cochat.zip
+          else
+            echo "Keine cochat.zip gefunden, nutze vorhandene Dateien."
+          fi
+          test -f web/index.html
+
+      - name: Änderungen speichern
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "CoChat aus ZIP entpackt"
+          git push origin main
+
+  deploy:
+    needs: unpack
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4
