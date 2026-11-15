@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111b21">
+  <title>CoChat</title>
+  <link rel="icon" href="logo.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ───── Anmeldung / Registrierung ───── -->
+<section id="auth" class="screen hidden">
+  <div class="card">
+    <img src="logo.png" alt="CoChat" class="logo-big">
+    <h1>CoChat</h1>
+    <div class="tabs">
+      <button id="tab-login" class="active">Anmelden</button>
+      <button id="tab-register">Registrieren</button>
+    </div>
+    <form id="form-login">
+      <input name="email" type="email" placeholder="E-Mail" autocomplete="email" required>
+      <input name="password" type="password" placeholder="Passwort" autocomplete="current-password" required>
+      <button class="primary">Anmelden</button>
+    </form>
+    <form id="form-register" class="hidden">
+      <input name="username" placeholder="Benutzername" minlength="3" maxlength="24" required>
+      <div class="row">
+        <input name="code" placeholder="Sicherheitscode (min. 8 Zeichen)" minlength="8" maxlength="32" required>
+        <button type="button" id="gen-code" class="ghost" title="Zufälligen Code erzeugen">🎲</button>
+      </div>
+      <input name="email" type="email" placeholder="E-Mail" autocomplete="email" required>
+      <input name="password" type="password" placeholder="Passwort (min. 8 Zeichen)" minlength="8" autocomplete="new-password" required>
+      <button class="primary">Konto erstellen</button>
+    </form>
+    <div class="or"><span>oder</span></div>
+    <button id="btn-google" class="google">Mit Google fortfahren</button>
+    <p id="auth-msg" class="msg"></p>
+  </div>
+</section>
+
+<!-- ───── Profil nach Google-Login anlegen ───── -->
+<section id="setup" class="screen hidden">
+  <div class="card">
+    <img src="logo.png" alt="" class="logo-big">
+    <h2>Profil einrichten</h2>
+    <p class="hint">Wähle Benutzername, Sicherheitscode und ein Verschlüsselungs-Passwort. Es schützt deinen privaten Schlüssel und kann nicht zurückgesetzt werden.</p>
+    <form id="form-setup">
+      <input name="username" placeholder="Benutzername" minlength="3" maxlength="24" required>
+      <div class="row">
+        <input name="code" placeholder="Sicherheitscode (min. 8 Zeichen)" minlength="8" maxlength="32" required>
+        <button type="button" id="gen-code2" class="ghost">🎲</button>
+      </div>
+      <input name="password" type="password" placeholder="Verschlüsselungs-Passwort (min. 8 Zeichen)" minlength="8" required>
+      <button class="primary">Speichern</button>
+    </form>
+    <p id="setup-msg" class="msg"></p>
+  </div>
+</section>
+
+<!-- ───── Entsperren (nach Seiten-Reload) ───── -->
+<section id="unlock" class="screen hidden">
+  <div class="card">
+    <img src="logo.png" alt="" class="logo-big">
+    <h2>Chats entsperren</h2>
+    <p class="hint">Gib dein Passwort ein, um deinen Schlüssel zu entsperren.</p>
+    <form id="form-unlock">
+      <input name="password" type="password" placeholder="Passwort" autocomplete="current-password" required>
+      <button class="primary">Entsperren</button>
+      <button type="button" id="btn-logout-unlock" class="ghost">Abmelden</button>
+    </form>
+    <p id="unlock-msg" class="msg"></p>
+  </div>
+</section>
+
+<!-- ───── Hauptanwendung ───── -->
+<main id="app" class="hidden">
+  <aside id="sidebar">
+    <header class="bar">
+      <div class="brand"><img src="logo.png" alt=""><strong>CoChat</strong></div>
+      <div class="bar-actions">
+        <button id="btn-add" title="Kontakt hinzufügen">＋</button>
+        <button id="btn-profile" title="Profil">👤</button>
+      </div>
+    </header>
+    <ul id="contact-list"></ul>
+  </aside>
+
+  <section id="chat">
+    <div id="empty-state">
+      <img src="logo.png" alt="">
+      <h2>CoChat</h2>
+      <p>Wähle einen Kontakt oder chatte mit CoChatAI.<br>Nachrichten zwischen Nutzern sind Ende-zu-Ende-verschlüsselt.</p>
+    </div>
+    <div id="chat-pane" class="hidden">
+      <header class="bar">
+        <button id="btn-back" class="back" aria-label="Zurück">←</button>
+        <div class="avatar" id="chat-avatar"></div>
+        <div class="titles">
+          <strong id="chat-title"></strong>
+          <small id="chat-sub"></small>
+        </div>
+      </header>
+      <div id="messages"></div>
+      <form id="composer">
+        <input id="input" placeholder="Nachricht schreiben" autocomplete="off">
+        <button class="send" aria-label="Senden">➤</button>
+      </form>
+    </div>
+  </section>
+</main>
+
+<!-- ───── Dialoge ───── -->
+<dialog id="dlg-add">
+  <form method="dialog" id="form-add">
+    <h3>Kontakt hinzufügen</h3>
+    <input name="q" placeholder="Benutzername, E-Mail oder Sicherheitscode" required>
+    <p id="add-msg" class="msg"></p>
+    <div class="row end">
+      <button value="cancel" class="ghost" formnovalidate>Abbrechen</button>
+      <button class="primary" value="ok">Hinzufügen</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-profile">
+  <h3>Profil</h3>
+  <p><small>Benutzername</small><br><strong id="p-name"></strong></p>
+  <p><small>Dein Sicherheitscode</small><br><strong id="p-code"></strong></p>
+  <p class="hint">Teile den Code, damit dich andere hinzufügen können.</p>
+  <div class="row end">
+    <button id="btn-clear-ai" class="ghost">KI-Verlauf löschen</button>
+    <button id="btn-logout" class="ghost">Abmelden</button>
+    <button id="btn-close-profile" class="primary">Schließen</button>
+  </div>
+</dialog>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
