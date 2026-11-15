@@ -32,6 +32,10 @@ input:focus { border-color: var(--accent); }
 .msg { min-height: 1.2em; margin: 0; font-size: 13px; color: #ff8a80; }
 .msg.ok { color: var(--accent); }
 .hint { color: var(--muted); font-size: 13px; margin: 0; }
+.recovery-key { font: 700 17px/1.6 ui-monospace, Menlo, Consolas, monospace; background: var(--bg); border: 1px dashed var(--accent); border-radius: 8px; padding: 14px 8px; overflow-wrap: anywhere; user-select: all; color: var(--accent); }
+.ack { display: flex; gap: 10px; align-items: center; text-align: left; font-size: 14px; }
+.ack input { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
+.primary:disabled { opacity: .4; cursor: not-allowed; }
 
 /* Layout */
 #app { display: grid; grid-template-columns: 380px 1fr; height: 100dvh; max-width: 1600px; margin: 0 auto; }

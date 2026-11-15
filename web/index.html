@@ -7,6 +7,15 @@
   <title>CoChat</title>
   <link rel="icon" href="logo.png">
   <link rel="stylesheet" href="style.css">
+  <script>
+    // Zeigt Ladefehler (z. B. blockiertes Skript) sichtbar an, statt nur eine leere Seite
+    function cochatErr(m) {
+      document.body.insertAdjacentHTML("beforeend",
+        "<pre style='color:#ff8a80;padding:16px;white-space:pre-wrap'>Fehler: " + String(m).replace(/</g, "&lt;") + "</pre>");
+    }
+    addEventListener("error", (e) => cochatErr(e.message || "Ein Skript konnte nicht geladen werden."), true);
+    addEventListener("unhandledrejection", (e) => cochatErr(e.reason && e.reason.message || e.reason));
+  </script>
 </head>
 <body>
 
@@ -23,6 +32,7 @@
       <input name="email" type="email" placeholder="E-Mail" autocomplete="email" required>
       <input name="password" type="password" placeholder="Passwort" autocomplete="current-password" required>
       <button class="primary">Anmelden</button>
+      <button type="button" id="btn-forgot" class="ghost">Passwort vergessen?</button>
     </form>
     <form id="form-register" class="hidden">
       <input name="username" placeholder="Benutzername" minlength="3" maxlength="24" required>
@@ -68,9 +78,45 @@
     <form id="form-unlock">
       <input name="password" type="password" placeholder="Passwort" autocomplete="current-password" required>
       <button class="primary">Entsperren</button>
+      <button type="button" id="btn-forgot-unlock" class="ghost">Passwort vergessen?</button>
       <button type="button" id="btn-logout-unlock" class="ghost">Abmelden</button>
     </form>
+    <form id="form-recover" class="hidden">
+      <p class="hint">Gib deinen Wiederherstellungsschlüssel und ein neues Passwort ein. Deine alten Chats bleiben lesbar.</p>
+      <input name="recovery" placeholder="Wiederherstellungsschlüssel (XXXX-XXXX-…)" autocomplete="off" autocapitalize="characters" required>
+      <input name="password" type="password" placeholder="Neues Passwort (min. 8 Zeichen)" minlength="8" autocomplete="new-password" required>
+      <button class="primary">Zurücksetzen &amp; entsperren</button>
+      <button type="button" id="btn-recover-back" class="ghost">Zurück</button>
+    </form>
     <p id="unlock-msg" class="msg"></p>
+  </div>
+</section>
+
+<!-- ───── Wiederherstellungsschlüssel anzeigen (einmalig) ───── -->
+<section id="recovery" class="screen hidden">
+  <div class="card">
+    <img src="logo.png" alt="" class="logo-big">
+    <h2>Dein Wiederherstellungsschlüssel</h2>
+    <p class="hint">Damit kannst du dein Passwort zurücksetzen, ohne deine alten Chats zu verlieren. Er wird nur jetzt angezeigt und nirgends gespeichert. Speichere ihn an einem sicheren Ort (Passwort-Manager, Notiz-App oder ausgedruckt).</p>
+    <div id="recovery-key" class="recovery-key"></div>
+    <button type="button" id="btn-copy-recovery" class="ghost">Kopieren</button>
+    <label class="ack"><input type="checkbox" id="recovery-ack"> Ich habe den Schlüssel sicher gespeichert</label>
+    <button type="button" id="btn-recovery-done" class="primary" disabled>Weiter</button>
+  </div>
+</section>
+
+<!-- ───── Neues Passwort nach Reset-Link ───── -->
+<section id="newpass" class="screen hidden">
+  <div class="card">
+    <img src="logo.png" alt="" class="logo-big">
+    <h2>Neues Passwort</h2>
+    <p class="hint">Gib deinen Wiederherstellungsschlüssel und ein neues Passwort ein. Deine alten Chats bleiben lesbar.</p>
+    <form id="form-newpass">
+      <input name="recovery" placeholder="Wiederherstellungsschlüssel (XXXX-XXXX-…)" autocomplete="off" autocapitalize="characters" required>
+      <input name="password" type="password" placeholder="Neues Passwort (min. 8 Zeichen)" minlength="8" autocomplete="new-password" required>
+      <button class="primary">Passwort ändern</button>
+    </form>
+    <p id="newpass-msg" class="msg"></p>
   </div>
 </section>
 

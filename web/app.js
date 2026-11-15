@@ -7,6 +7,7 @@ const $ = (s) => document.querySelector(s);
 const AI = { id: "ai", username: "CoChatAI", isAI: true };
 
 const S = {
+  recovering: false, afterRecovery: null,
   user: null, profile: null, priv: null,
   contacts: [], active: null,
   unread: {}, seen: new Set(),
@@ -15,8 +16,13 @@ const S = {
 
 // ───────── Hilfsfunktionen ─────────
 const show = (id) => {
-  ["auth", "setup", "unlock", "app"].forEach((x) => $("#" + x).classList.toggle("hidden", x !== id));
+  ["auth", "setup", "unlock", "recovery", "newpass", "app"].forEach((x) => $("#" + x).classList.toggle("hidden", x !== id));
 };
+function showFatal(e) {
+  console.error(e);
+  show("auth");
+  say($("#auth-msg"), "Fehler beim Start: " + errText(e));
+}
 const say = (el, text, ok = false) => { el.textContent = text; el.classList.toggle("ok", ok); };
 const fmtTime = (d) => new Date(d).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
 const fmtDay = (d) => new Date(d).toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
@@ -24,13 +30,37 @@ const validCode = (c) => /^[\x21-\x7E]{8,32}$/.test(c) && /[A-Za-z]/.test(c) && 
 const errText = (e) => e?.message || String(e);
 
 // ───────── Start ─────────
-init();
 async function init() {
   wireAuthUI();
+  sb.auth.onAuthStateChange((ev) => {
+    if (ev === "PASSWORD_RECOVERY") { S.recovering = true; show("newpass"); }
+    if (ev === "SIGNED_OUT") location.reload();
+  });
   const { data: { session } } = await sb.auth.getSession();
+  if (S.recovering) return;                    // Nutzer kommt vom „Passwort vergessen"-Link
   if (!session) return show("auth");
   await afterLogin(session.user);
-  sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") location.reload(); });
+}
+
+/** Einen Wiederherstellungsschlüssel anzeigen; der Nutzer muss bestätigen, dass er ihn gesichert hat. */
+function showRecovery(key, label, next) {
+  $("#recovery-key").textContent = key;
+  $("#btn-recovery-done").textContent = label;
+  $("#recovery-ack").checked = false;
+  $("#btn-recovery-done").disabled = true;
+  S.afterRecovery = next;
+  show("recovery");
+}
+
+/** Passwort neu setzen (Login + Verschlüsselung) mit dem Wiederherstellungsschlüssel. */
+async function recoverWith(recoveryKey, newPassword) {
+  const r = await C.recoverWithKey(S.profile, recoveryKey, newPassword);   // prüft den Schlüssel zuerst
+  const { error: e1 } = await sb.auth.updateUser({ password: newPassword });
+  if (e1) throw e1;
+  const { error: e2 } = await sb.from("profiles").update(r.fields).eq("id", S.user.id);
+  if (e2) throw e2;
+  Object.assign(S.profile, r.fields);
+  S.priv = r.key;
 }
 
 async function afterLogin(user) {
@@ -78,14 +108,55 @@ function wireAuthUI() {
     if (!av.username_free) return say(msg, "Dieser Benutzername ist schon vergeben.");
     if (!av.code_free) return say(msg, "Dieser Sicherheitscode ist schon vergeben – bitte einen anderen wählen.");
     say(msg, "Erzeuge Schlüssel …");
-    const keys = await C.generateKeyMaterial(f.get("password"));
+    const { meta: keys, recoveryKey } = await C.generateKeyMaterial(f.get("password"));
     const { error } = await sb.auth.signUp({
       email: f.get("email").trim(), password: f.get("password"),
       options: { emailRedirectTo: location.origin + location.pathname, data: { username, security_code: code, ...keys } },
     });
     if (error) return say(msg, error.message);
-    say(msg, "Fast geschafft! Wir haben dir einen Bestätigungslink per E-Mail gesendet.", true);
+    // Wiederherstellungsschlüssel einmalig anzeigen; danach Bestätigungs-E-Mail abwarten
+    showRecovery(recoveryKey, "Weiter zur Anmeldung", () => {
+      show("auth");
+      say($("#auth-msg"), "Fast geschafft! Wir haben dir einen Bestätigungslink per E-Mail gesendet. Danach kannst du dich anmelden.", true);
+    });
   };
+
+  // Passwort vergessen (Login-Seite): Reset-Link per E-Mail
+  $("#btn-forgot").onclick = async () => {
+    const msg = $("#auth-msg"), email = $("#form-login [name=email]").value.trim();
+    if (!email) return say(msg, "Bitte zuerst oben deine E-Mail eintragen.");
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    if (error) return say(msg, error.message);
+    say(msg, "Wenn die E-Mail existiert, haben wir dir einen Link zum Zurücksetzen geschickt. Du brauchst danach deinen Wiederherstellungsschlüssel.", true);
+  };
+
+  // Neues Passwort nach Reset-Link (zusammen mit dem Wiederherstellungsschlüssel)
+  $("#form-newpass").onsubmit = async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target), msg = $("#newpass-msg");
+    say(msg, "Prüfe Schlüssel …");
+    try {
+      const { data: { user } } = await sb.auth.getUser();
+      S.user = user;
+      const { data: profile } = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
+      if (!profile) return say(msg, "Kein Profil gefunden.");
+      S.profile = profile;
+      await recoverWith(f.get("recovery"), f.get("password"));
+      S.recovering = false;
+      startApp();
+    } catch (err) {
+      say(msg, "Das hat nicht geklappt – Wiederherstellungsschlüssel prüfen. (" + errText(err) + ")");
+    }
+  };
+
+  // Wiederherstellungsschlüssel-Bildschirm
+  $("#btn-copy-recovery").onclick = async () => {
+    const key = $("#recovery-key").textContent;
+    try { await navigator.clipboard.writeText(key); $("#btn-copy-recovery").textContent = "Kopiert ✓"; }
+    catch { const r = document.createRange(); r.selectNodeContents($("#recovery-key")); getSelection().removeAllRanges(); getSelection().addRange(r); }
+  };
+  $("#recovery-ack").onchange = (e) => { $("#btn-recovery-done").disabled = !e.target.checked; };
+  $("#btn-recovery-done").onclick = () => S.afterRecovery?.();
 
   // Google
   $("#btn-google").onclick = () => sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } });
@@ -101,16 +172,17 @@ function wireAuthUI() {
     if (!av?.username_free) return say(msg, "Benutzername schon vergeben.");
     if (!av?.code_free) return say(msg, "Sicherheitscode schon vergeben.");
     say(msg, "Erzeuge Schlüssel …");
-    const keys = await C.generateKeyMaterial(f.get("password"));
+    const { meta: keys, recoveryKey } = await C.generateKeyMaterial(f.get("password"));
     const { error } = await sb.rpc("create_profile", {
       p_username: username, p_code: code, p_public_key: keys.public_key,
       p_enc_private_key: keys.enc_private_key, p_salt: keys.key_salt, p_iv: keys.key_iv,
+      p_rec_enc: keys.rec_enc_private_key, p_rec_salt: keys.rec_salt, p_rec_iv: keys.rec_iv,
     });
     if (error) return say(msg, errText(error));
     const { data: profile } = await sb.from("profiles").select("*").eq("id", S.user.id).single();
     S.profile = profile;
     S.priv = await C.unlockPrivateKey(profile, f.get("password"));
-    startApp();
+    showRecovery(recoveryKey, "Weiter zu CoChat", startApp);
   };
 
   // Entsperren
@@ -122,6 +194,23 @@ function wireAuthUI() {
     } catch { say($("#unlock-msg"), "Falsches Passwort."); }
   };
   $("#btn-logout-unlock").onclick = logout;
+
+  // Passwort vergessen (nach Neuladen, schon eingeloggt): per Wiederherstellungsschlüssel
+  $("#btn-forgot-unlock").onclick = () => {
+    $("#form-unlock").classList.add("hidden");
+    $("#form-recover").classList.remove("hidden");
+  };
+  $("#btn-recover-back").onclick = () => {
+    $("#form-recover").classList.add("hidden");
+    $("#form-unlock").classList.remove("hidden");
+  };
+  $("#form-recover").onsubmit = async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target), msg = $("#unlock-msg");
+    say(msg, "Prüfe Schlüssel …");
+    try { await recoverWith(f.get("recovery"), f.get("password")); startApp(); }
+    catch (err) { say(msg, "Das hat nicht geklappt – Wiederherstellungsschlüssel prüfen. (" + errText(err) + ")"); }
+  };
 }
 
 const logout = async () => { await sb.auth.signOut(); location.reload(); };
@@ -387,3 +476,6 @@ function subscribe() {
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "contacts", filter: `owner_id=eq.${me}` }, () => loadContacts())
     .subscribe();
 }
+
+// Ganz am Ende starten, damit alle Konstanten und Funktionen oben schon definiert sind
+init().catch(showFatal);
