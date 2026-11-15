@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { CONFIG } from "./config.js";
-import * as C from "./crypto.js";
+import { CONFIG } from "./config.js?v=3";
+import * as C from "./crypto.js?v=3";
 
 const sb = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 const $ = (s) => document.querySelector(s);
